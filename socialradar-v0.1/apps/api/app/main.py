@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import DateTime, Integer, String, Text, create_engine, or_, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, inspect, or_, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 DATABASE_URL = os.getenv(
@@ -46,6 +46,7 @@ class Thread(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     author_username: Mapped[str] = mapped_column(String(100), index=True)
+    author_profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id", ondelete="SET NULL"), index=True)
     title: Mapped[str] = mapped_column(String(500))
     topic: Mapped[str] = mapped_column(String(200), index=True)
     language: Mapped[str | None] = mapped_column(String(50), index=True)
@@ -72,7 +73,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def ensure_compatible_schema() -> None:
+    """Apply only additive compatibility changes for existing demo databases."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "threads" in tables:
+        columns = {column["name"] for column in inspector.get_columns("threads")}
+        if "author_profile_id" not in columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE threads "
+                        "ADD COLUMN IF NOT EXISTS author_profile_id INTEGER "
+                        "REFERENCES profiles(id) ON DELETE SET NULL"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_threads_author_profile_id "
+                        "ON threads(author_profile_id)"
+                    )
+                )
+
 Base.metadata.create_all(engine)
+ensure_compatible_schema()
 
 
 def utc(value: datetime | None) -> datetime | None:
@@ -117,6 +141,7 @@ def thread_dict(thread: Thread) -> dict:
     return {
         "id": thread.id,
         "author_username": thread.author_username,
+        "author_profile_id": thread.author_profile_id,
         "title": thread.title,
         "topic": thread.topic,
         "language": thread.language,
@@ -185,7 +210,7 @@ def profiles(
 @app.get("/profiles/{username}")
 def profile(username: str):
     with Session(engine) as db:
-        profile = db.scalar(select(Profile).where(Profile.username == username))
+        profile = db.scalar(select(Profile).where(Profile.username.ilike(username)))
         if not profile:
             raise HTTPException(status_code=404, detail="profile_not_found")
         return profile_dict(profile)
