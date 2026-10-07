@@ -7,8 +7,13 @@ services:
       POSTGRES_PASSWORD: socialradar
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socialradar -d socialradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
-      - socialradar_pg:/var/lib/postgresql
+      - socialradar_pg:/var/lib/postgresql/data
 
 volumes:
   socialradar_pg:
