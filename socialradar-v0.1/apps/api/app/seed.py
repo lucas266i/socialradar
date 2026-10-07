@@ -3,11 +3,18 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .main import Base, Profile, Thread, engine
+from .main import Account, Base, Profile, Source, Thread, engine
 
 Base.metadata.create_all(engine)
 
 now = datetime.now(timezone.utc)
+
+demo_sources = [
+    Source(key="x", name="X", base_url="https://x.com", active=True),
+    Source(key="reddit", name="Reddit", base_url="https://www.reddit.com", active=True),
+    Source(key="youtube", name="YouTube", base_url="https://www.youtube.com", active=True),
+    Source(key="github", name="GitHub", base_url="https://github.com", active=True),
+]
 
 profiles = [
     Profile(username="ana_ai", name="Ana Torres", bio="AI Engineer | Building agents and developer tools", country="Colombia", language="es", followers=18400, following=900, website="https://example.com/ana", youtube="https://youtube.com/", github="https://github.com/", telegram=None, linkedin="https://linkedin.com/", last_post_at=now - timedelta(days=2), last_activity_at=now - timedelta(days=1), posts_30d=22, replies_30d=31, reposts_30d=14),
@@ -25,6 +32,20 @@ threads = [
 ]
 
 with Session(engine) as db:
+    for incoming in demo_sources:
+        existing = db.scalar(select(Source).where(Source.key == incoming.key))
+        if existing is None:
+            db.add(incoming)
+        else:
+            existing.name = incoming.name
+            existing.base_url = incoming.base_url
+            existing.active = incoming.active
+    db.flush()
+
+    x_source = db.scalar(select(Source).where(Source.key == "x"))
+    if x_source is None:
+        raise RuntimeError("X source not found")
+
     for incoming in profiles:
         existing = db.scalar(select(Profile).where(Profile.username == incoming.username))
         if existing is None:
@@ -46,7 +67,14 @@ with Session(engine) as db:
         if author is None:
             raise RuntimeError(f"Seed author not found: {incoming.author_username}")
         incoming.author_profile_id = author.id
+        account = db.scalar(
+            select(Account).where(
+                Account.source_id == x_source.id,
+                Account.external_id == incoming.author_username,
+            )
+        )
+        incoming.account_id = account.id if account else None
         db.add(incoming)
     db.commit()
 
-print(f"Seed completed: {len(profiles)} profiles and {len(threads)} demo threads.")
+print(f"Seed completed: {len(demo_sources)} sources, {len(profiles)} profiles and {len(threads)} demo threads.")
