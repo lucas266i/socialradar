@@ -38,6 +38,16 @@ type Thread = {
   score: number;
 };
 
+function safeExternalUrl(value?: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
@@ -228,11 +238,11 @@ export default function Home() {
                 🌎 {profile.country || "—"} · 🗣 {profile.language || "—"}
               </div>
               <div className="links">
-                {profile.website && <a href={profile.website} target="_blank" rel="noreferrer">🌐 Web</a>}
-                {profile.youtube && <a href={profile.youtube} target="_blank" rel="noreferrer">▶ YouTube</a>}
-                {profile.telegram && <a href={profile.telegram} target="_blank" rel="noreferrer">✈ Telegram</a>}
-                {profile.github && <a href={profile.github} target="_blank" rel="noreferrer">🐙 GitHub</a>}
-                {profile.linkedin && <a href={profile.linkedin} target="_blank" rel="noreferrer">in LinkedIn</a>}
+                {safeExternalUrl(profile.website) && <a href={safeExternalUrl(profile.website)!} target="_blank" rel="noopener noreferrer">🌐 Web</a>}
+                {safeExternalUrl(profile.youtube) && <a href={safeExternalUrl(profile.youtube)!} target="_blank" rel="noopener noreferrer">▶ YouTube</a>}
+                {safeExternalUrl(profile.telegram) && <a href={safeExternalUrl(profile.telegram)!} target="_blank" rel="noopener noreferrer">✈ Telegram</a>}
+                {safeExternalUrl(profile.github) && <a href={safeExternalUrl(profile.github)!} target="_blank" rel="noopener noreferrer">🐙 GitHub</a>}
+                {safeExternalUrl(profile.linkedin) && <a href={safeExternalUrl(profile.linkedin)!} target="_blank" rel="noopener noreferrer">in LinkedIn</a>}
               </div>
             </article>
           ))}
