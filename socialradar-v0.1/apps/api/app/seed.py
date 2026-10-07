@@ -40,7 +40,13 @@ with Session(engine) as db:
 
     demo_titles = [thread.title for thread in threads]
     db.execute(delete(Thread).where(Thread.title.in_(demo_titles)))
-    db.add_all(threads)
+
+    for incoming in threads:
+        author = db.scalar(select(Profile).where(Profile.username == incoming.author_username))
+        if author is None:
+            raise RuntimeError(f"Seed author not found: {incoming.author_username}")
+        incoming.author_profile_id = author.id
+        db.add(incoming)
     db.commit()
 
 print(f"Seed completed: {len(profiles)} profiles and {len(threads)} demo threads.")
