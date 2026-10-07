@@ -59,6 +59,36 @@ with Session(engine) as db:
         ):
             setattr(existing, field, getattr(incoming, field))
 
+    db.flush()
+    profile_by_username = {
+        profile.username: profile
+        for profile in db.scalars(select(Profile)).all()
+    }
+
+    for username, profile in profile_by_username.items():
+        account = db.scalar(
+            select(Account).where(
+                Account.source_id == x_source.id,
+                Account.external_id == username,
+            )
+        )
+        if account is None:
+            db.add(
+                Account(
+                    source_id=x_source.id,
+                    profile_id=profile.id,
+                    external_id=username,
+                    username=username,
+                    url=f"https://x.com/{username}",
+                )
+            )
+        else:
+            account.profile_id = profile.id
+            account.username = username
+            account.url = f"https://x.com/{username}"
+
+    db.flush()
+
     demo_titles = [thread.title for thread in threads]
     db.execute(delete(Thread).where(Thread.title.in_(demo_titles)))
 
