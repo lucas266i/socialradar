@@ -11,10 +11,10 @@ El código de la aplicación está dentro de `socialradar-v0.1/`.
 ## Requisitos
 
 - Docker + Docker Compose
-- Node.js 20+
+- Node.js 20.9+
 - Python 3.11+
 
-## Arranque
+## Arranque local
 
 ### 1. Base de datos
 
@@ -27,7 +27,7 @@ docker compose up -d db
 
 ### 2. Backend
 
-En otra terminal, desde la raíz:
+En otra terminal:
 
 ```bash
 cd socialradar-v0.1/apps/api
@@ -35,16 +35,18 @@ python -m venv .venv
 ```
 
 Windows:
+
 ```bat
 .venv\Scripts\activate
 ```
 
 Linux/macOS:
+
 ```bash
 source .venv/bin/activate
 ```
 
-Instalar dependencias y arrancar:
+Instalar y arrancar:
 
 ```bash
 pip install -r requirements.txt
@@ -74,13 +76,32 @@ Abrir http://localhost:3000.
 
 API: http://localhost:8000/docs
 
-### API en otro dominio
+## Variables de entorno
 
-Define `NEXT_PUBLIC_API_URL` en el frontend y `CORS_ORIGINS` en el backend. Ejemplo:
+Backend:
 
-```text
-NEXT_PUBLIC_API_URL=https://api.example.com
-CORS_ORIGINS=https://socialradar.example.com
+- `DATABASE_URL`: conexión PostgreSQL.
+- `CORS_ORIGINS`: orígenes permitidos separados por coma.
+
+Frontend:
+
+- `NEXT_PUBLIC_API_URL`: URL pública de la API.
+
+## Verificación
+
+Backend:
+
+```bash
+cd socialradar-v0.1/apps/api
+python -m compileall app
+```
+
+Frontend:
+
+```bash
+cd socialradar-v0.1/apps/web
+npm install
+npm run build
 ```
 
 ## Estado
