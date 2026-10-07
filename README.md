@@ -87,6 +87,28 @@ Frontend:
 
 - `NEXT_PUBLIC_API_URL`: URL pública de la API.
 
+## Arranque con Docker
+
+Desde `socialradar-v0.1/`:
+
+```bash
+docker compose up --build
+```
+
+La aplicación queda disponible en `http://localhost:3000` y la API en `http://localhost:8000/docs`. El servicio `seed` carga los datos de demostración automáticamente y no borra registros ajenos a esos datos demo.
+
+Para detener los servicios:
+
+```bash
+docker compose down
+```
+
+Para eliminar también la base de datos local:
+
+```bash
+docker compose down -v
+```
+
 ## Verificación
 
 Backend:
