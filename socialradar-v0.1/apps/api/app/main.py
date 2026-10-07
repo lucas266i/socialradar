@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, inspect, or_, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
+from .adapters import get_adapter, list_adapters
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg://socialradar:socialradar@localhost:5432/socialradar",
@@ -207,10 +209,32 @@ def sources():
         return {
             "count": len(rows),
             "results": [
-                {"id": source.id, "key": source.key, "name": source.name, "base_url": source.base_url}
+                {
+                    "id": source.id,
+                    "key": source.key,
+                    "name": source.name,
+                    "base_url": source.base_url,
+                    "adapter": bool(get_adapter(source.key)),
+                    "capabilities": get_adapter(source.key).capabilities() if get_adapter(source.key) else {},
+                }
                 for source in rows
             ],
         }
+
+
+@app.get("/adapters")
+def adapters():
+    return {
+        "count": len(list_adapters()),
+        "results": [
+            {
+                "key": adapter.key,
+                "name": adapter.name,
+                "capabilities": adapter.capabilities(),
+            }
+            for adapter in list_adapters()
+        ],
+    }
 
 
 @app.get("/health")
