@@ -1,11 +1,12 @@
+import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "SocialRadar",
-  description: "Descubrimiento de perfiles y hilos"
+  description: "Descubrimiento de perfiles y hilos públicos",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="es">
       <body>{children}</body>
