@@ -1,22 +1,50 @@
- "use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
 type Profile = {
-  username: string; name: string; bio: string; country: string;
-  language: string; followers: number; last_activity_at: string;
-  activity_age_days: number; posts_30d: number; replies_30d: number;
-  reposts_30d: number; website?: string; youtube?: string;
-  telegram?: string; github?: string; linkedin?: string;
+  username: string;
+  name: string;
+  bio: string;
+  country?: string | null;
+  language?: string | null;
+  followers: number;
+  last_activity_at?: string | null;
+  activity_age_days?: number | null;
+  posts_30d: number;
+  replies_30d: number;
+  reposts_30d: number;
+  website?: string | null;
+  youtube?: string | null;
+  telegram?: string | null;
+  github?: string | null;
+  linkedin?: string | null;
 };
 
 type Thread = {
-  id: number; author_username: string; title: string; topic: string;
-  language: string; body: string; post_count: number; likes: number;
-  reposts: number; replies: number; created_at: string; score: number;
+  id: number;
+  author_username: string;
+  title: string;
+  topic: string;
+  language?: string | null;
+  body: string;
+  post_count: number;
+  likes: number;
+  reposts: number;
+  replies: number;
+  created_at: string;
+  score: number;
 };
+
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
 
 export default function Home() {
   const [section, setSection] = useState<"profiles" | "threads">("profiles");
@@ -30,33 +58,47 @@ export default function Home() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  async function search() {
+  const search = useCallback(async () => {
     setLoading(true);
+    setError("");
+
     try {
       if (section === "profiles") {
         const params = new URLSearchParams({
-          q, country, language,
+          q,
+          country,
+          language,
           min_followers: minFollowers || "0",
           max_followers: maxFollowers || "2000000000",
           active_days: activeDays || "0",
-          limit: "100"
+          limit: "100",
         });
-        const r = await fetch(`${API}/profiles?${params}`);
-        const data = await r.json();
+        const data = await getJson<{ results?: Profile[] }>(`${API}/profiles?${params}`);
         setProfiles(data.results || []);
       } else {
-        const params = new URLSearchParams({ q, language, days, limit: "100" });
-        const r = await fetch(`${API}/threads?${params}`);
-        const data = await r.json();
+        const params = new URLSearchParams({
+          q,
+          language,
+          days,
+          limit: "100",
+        });
+        const data = await getJson<{ results?: Thread[] }>(`${API}/threads?${params}`);
         setThreads(data.results || []);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo conectar con la API.");
+      if (section === "profiles") setProfiles([]);
+      else setThreads([]);
     } finally {
       setLoading(false);
     }
-  }
+  }, [section, q, country, language, minFollowers, maxFollowers, activeDays, days]);
 
-  useEffect(() => { search(); }, [section]);
+  useEffect(() => {
+    void search();
+  }, [search]);
 
   return (
     <main>
@@ -68,65 +110,163 @@ export default function Home() {
         <span className="badge">V0.1 • DEMO</span>
       </header>
 
-      <nav className="tabs">
-        <button className={section === "profiles" ? "active" : ""} onClick={() => setSection("profiles")}>🔎 Perfiles</button>
-        <button className={section === "threads" ? "active" : ""} onClick={() => setSection("threads")}>🧵 Mejores hilos</button>
+      <nav className="tabs" aria-label="Secciones">
+        <button
+          className={section === "profiles" ? "active" : ""}
+          onClick={() => setSection("profiles")}
+          type="button"
+        >
+          🔎 Perfiles
+        </button>
+        <button
+          className={section === "threads" ? "active" : ""}
+          onClick={() => setSection("threads")}
+          type="button"
+        >
+          🧵 Mejores hilos
+        </button>
       </nav>
 
       <section className="searchbox">
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder={section === "profiles" ? "Bio, nombre, usuario o palabra clave..." : "Tema, palabra o título del hilo..."} />
-        {section === "profiles" && <>
-          <input value={country} onChange={e => setCountry(e.target.value)} placeholder="País (ej. Colombia)" />
-          <select value={language} onChange={e => setLanguage(e.target.value)}>
-            <option value="">Todos los idiomas</option><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option>
+        <input
+          value={q}
+          onChange={(event) => setQ(event.target.value)}
+          placeholder={
+            section === "profiles"
+              ? "Bio, nombre, usuario o palabra clave..."
+              : "Tema, palabra o título del hilo..."
+          }
+          aria-label="Buscar"
+        />
+
+        {section === "profiles" && (
+          <>
+            <input
+              value={country}
+              onChange={(event) => setCountry(event.target.value)}
+              placeholder="País (ej. Colombia)"
+              aria-label="País"
+            />
+            <select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label="Idioma">
+              <option value="">Todos los idiomas</option>
+              <option value="es">Español</option>
+              <option value="en">English</option>
+              <option value="pt">Português</option>
+            </select>
+            <input
+              value={minFollowers}
+              onChange={(event) => setMinFollowers(event.target.value)}
+              placeholder="Seguidores mín."
+              type="number"
+              min="0"
+              aria-label="Seguidores mínimos"
+            />
+            <input
+              value={maxFollowers}
+              onChange={(event) => setMaxFollowers(event.target.value)}
+              placeholder="Seguidores máx."
+              type="number"
+              min="0"
+              aria-label="Seguidores máximos"
+            />
+            <select value={activeDays} onChange={(event) => setActiveDays(event.target.value)} aria-label="Actividad">
+              <option value="15">Activo 15 días</option>
+              <option value="30">Activo 30 días</option>
+              <option value="60">Activo 60 días</option>
+              <option value="90">Activo 90 días</option>
+              <option value="180">Activo 180 días</option>
+              <option value="0">Sin filtro de actividad</option>
+            </select>
+          </>
+        )}
+
+        {section === "threads" && (
+          <select value={days} onChange={(event) => setDays(event.target.value)} aria-label="Antigüedad">
+            <option value="7">Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="180">Últimos 180 días</option>
+            <option value="0">Todo</option>
           </select>
-          <input value={minFollowers} onChange={e => setMinFollowers(e.target.value)} placeholder="Seguidores mín." type="number" />
-          <input value={maxFollowers} onChange={e => setMaxFollowers(e.target.value)} placeholder="Seguidores máx." type="number" />
-          <select value={activeDays} onChange={e => setActiveDays(e.target.value)}>
-            <option value="15">Activo 15 días</option><option value="30">Activo 30 días</option><option value="60">Activo 60 días</option><option value="90">Activo 90 días</option><option value="180">Activo 180 días</option><option value="0">Sin filtro de actividad</option>
-          </select>
-        </>}
-        {section === "threads" && <select value={days} onChange={e => setDays(e.target.value)}>
-          <option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="180">Últimos 180 días</option><option value="0">Todo</option>
-        </select>}
-        <button className="search" onClick={search}>{loading ? "Buscando..." : "Buscar"}</button>
+        )}
+
+        <button className="search" onClick={() => void search()} disabled={loading} type="button">
+          {loading ? "Buscando..." : "Buscar"}
+        </button>
       </section>
+
+      {error && (
+        <div className="error" role="alert">
+          {error}. Verifica que la API esté ejecutándose en {API}.
+        </div>
+      )}
 
       {section === "profiles" ? (
         <section className="grid">
-          {profiles.map(p => (
-            <article className="card" key={p.username}>
-              <div className="row"><strong>{p.name}</strong><span className="green">● {p.activity_age_days === 0 ? "hoy" : `hace ${p.activity_age_days} días`}</span></div>
-              <div className="handle">@{p.username}</div>
-              <p>{p.bio}</p>
-              <div className="stats"><span>👥 {p.followers.toLocaleString()}</span><span>📝 {p.posts_30d} posts/30d</span><span>💬 {p.replies_30d}</span><span>🔁 {p.reposts_30d}</span></div>
-              <div className="meta">🌎 {p.country || "—"} · 🗣 {p.language || "—"}</div>
+          {!loading && profiles.length === 0 && !error && <div className="empty">No hay perfiles que coincidan.</div>}
+          {profiles.map((profile) => (
+            <article className="card" key={profile.username}>
+              <div className="row">
+                <strong>{profile.name}</strong>
+                <span className="green">
+                  ● {profile.activity_age_days == null
+                    ? "sin actividad"
+                    : profile.activity_age_days === 0
+                      ? "hoy"
+                      : `hace ${profile.activity_age_days} días`}
+                </span>
+              </div>
+              <div className="handle">@{profile.username}</div>
+              <p>{profile.bio}</p>
+              <div className="stats">
+                <span>👥 {profile.followers.toLocaleString()}</span>
+                <span>📝 {profile.posts_30d} posts/30d</span>
+                <span>💬 {profile.replies_30d}</span>
+                <span>🔁 {profile.reposts_30d}</span>
+              </div>
+              <div className="meta">
+                🌎 {profile.country || "—"} · 🗣 {profile.language || "—"}
+              </div>
               <div className="links">
-                {p.website && <a href={p.website} target="_blank">🌐 Web</a>}
-                {p.youtube && <a href={p.youtube} target="_blank">▶ YouTube</a>}
-                {p.telegram && <a href={p.telegram} target="_blank">✈ Telegram</a>}
-                {p.github && <a href={p.github} target="_blank">🐙 GitHub</a>}
+                {profile.website && <a href={profile.website} target="_blank" rel="noreferrer">🌐 Web</a>}
+                {profile.youtube && <a href={profile.youtube} target="_blank" rel="noreferrer">▶ YouTube</a>}
+                {profile.telegram && <a href={profile.telegram} target="_blank" rel="noreferrer">✈ Telegram</a>}
+                {profile.github && <a href={profile.github} target="_blank" rel="noreferrer">🐙 GitHub</a>}
+                {profile.linkedin && <a href={profile.linkedin} target="_blank" rel="noreferrer">in LinkedIn</a>}
               </div>
             </article>
           ))}
         </section>
       ) : (
         <section className="threads">
-          {threads.map((t, i) => (
-            <article className="thread" key={t.id}>
-              <div className="rank">#{i + 1}</div>
+          {!loading && threads.length === 0 && !error && <div className="empty">No hay hilos que coincidan.</div>}
+          {threads.map((thread, index) => (
+            <article className="thread" key={thread.id}>
+              <div className="rank">#{index + 1}</div>
               <div>
-                <div className="threadhead"><span>🧵</span><strong>{t.title}</strong></div>
-                <div className="handle">@{t.author_username} · {t.topic} · {t.language}</div>
-                <p>{t.body}</p>
-                <div className="stats"><span>❤️ {t.likes.toLocaleString()}</span><span>🔁 {t.reposts.toLocaleString()}</span><span>💬 {t.replies.toLocaleString()}</span><span>🧵 {t.post_count} posts</span></div>
+                <div className="threadhead">
+                  <span>🧵</span>
+                  <strong>{thread.title}</strong>
+                </div>
+                <div className="handle">
+                  @{thread.author_username} · {thread.topic} · {thread.language || "—"}
+                </div>
+                <p>{thread.body}</p>
+                <div className="stats">
+                  <span>❤️ {thread.likes.toLocaleString()}</span>
+                  <span>🔁 {thread.reposts.toLocaleString()}</span>
+                  <span>💬 {thread.replies.toLocaleString()}</span>
+                  <span>🧵 {thread.post_count} posts</span>
+                </div>
               </div>
             </article>
           ))}
         </section>
       )}
 
-      <footer>SocialRadar V0.1 — datos de demostración. X API se conectará mediante un adaptador en la siguiente fase.</footer>
+      <footer>
+        SocialRadar V0.1 — datos de demostración. La integración con X deberá usar un adaptador oficial en una fase posterior.
+      </footer>
     </main>
   );
 }
