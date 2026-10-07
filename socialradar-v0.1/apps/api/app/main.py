@@ -18,6 +18,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class Source(Base):
+    __tablename__ = "sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    active: Mapped[bool] = mapped_column(default=True)
+
+
 class Profile(Base):
     __tablename__ = "profiles"
 
@@ -41,12 +51,28 @@ class Profile(Base):
     reposts_30d: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), index=True)
+    profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id", ondelete="SET NULL"), index=True)
+    external_id: Mapped[str] = mapped_column(String(200), index=True)
+    username: Mapped[str] = mapped_column(String(100), index=True)
+    url: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
+
+
 class Thread(Base):
     __tablename__ = "threads"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     author_username: Mapped[str] = mapped_column(String(100), index=True)
     author_profile_id: Mapped[int | None] = mapped_column(ForeignKey("profiles.id", ondelete="SET NULL"), index=True)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), index=True)
     title: Mapped[str] = mapped_column(String(500))
     topic: Mapped[str] = mapped_column(String(200), index=True)
     language: Mapped[str | None] = mapped_column(String(50), index=True)
@@ -94,6 +120,23 @@ def ensure_compatible_schema() -> None:
                         "ON threads(author_profile_id)"
                     )
                 )
+        if "accounts" in tables and "threads" in tables:
+            columns = {column["name"] for column in inspector.get_columns("threads")}
+            if "account_id" not in columns:
+                with engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            "ALTER TABLE threads "
+                            "ADD COLUMN IF NOT EXISTS account_id INTEGER "
+                            "REFERENCES accounts(id) ON DELETE SET NULL"
+                        )
+                    )
+                    connection.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_threads_account_id "
+                            "ON threads(account_id)"
+                        )
+                    )
 
 Base.metadata.create_all(engine)
 ensure_compatible_schema()
@@ -142,6 +185,7 @@ def thread_dict(thread: Thread) -> dict:
         "id": thread.id,
         "author_username": thread.author_username,
         "author_profile_id": thread.author_profile_id,
+        "account_id": thread.account_id,
         "title": thread.title,
         "topic": thread.topic,
         "language": thread.language,
@@ -152,7 +196,21 @@ def thread_dict(thread: Thread) -> dict:
         "replies": thread.replies,
         "created_at": thread.created_at,
         "score": thread.likes + thread.reposts * 2 + thread.replies,
+        "source": None,
     }
+
+
+@app.get("/sources")
+def sources():
+    with Session(engine) as db:
+        rows = list(db.scalars(select(Source).where(Source.active.is_(True)).order_by(Source.name)).all())
+        return {
+            "count": len(rows),
+            "results": [
+                {"id": source.id, "key": source.key, "name": source.name, "base_url": source.base_url}
+                for source in rows
+            ],
+        }
 
 
 @app.get("/health")
@@ -251,4 +309,16 @@ def threads(
                 ).limit(limit)
             ).all()
         )
-        return {"count": len(rows), "results": [thread_dict(thread) for thread in rows]}
+        results = []
+        for thread in rows:
+            item = thread_dict(thread)
+            if thread.account_id:
+                account = db.get(Account, thread.account_id)
+                if account:
+                    source = db.get(Source, account.source_id)
+                    item["source"] = source.key if source else None
+                    item["source_name"] = source.name if source else None
+                    item["account_username"] = account.username
+                    item["account_url"] = account.url
+            results.append(item)
+        return {"count": len(results), "results": results}
